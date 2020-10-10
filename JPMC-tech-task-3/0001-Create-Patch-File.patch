@@ -1,0 +1,111 @@
+From 826d0213498fc960406da17d9e26df7852f8a6e6 Mon Sep 17 00:00:00 2001
+From: Charlie <christc@tcd.ie>
+Date: Sat, 10 Oct 2020 21:57:19 +0100
+Subject: [PATCH] Create Patch File
+
+---
+ src/DataManipulator.ts | 34 ++++++++++++++++++++++++----------
+ src/Graph.tsx          | 22 ++++++++++++++--------
+ 2 files changed, 38 insertions(+), 18 deletions(-)
+
+diff --git a/src/DataManipulator.ts b/src/DataManipulator.ts
+index f6b15ff..c4d5f61 100644
+--- a/src/DataManipulator.ts
++++ b/src/DataManipulator.ts
+@@ -1,20 +1,34 @@
+ import { ServerRespond } from './DataStreamer';
+ 
+ export interface Row {
+-  stock: string,
+-  top_ask_price: number,
++  price_abc: number,
++  price_def: number,
++  ratio: number,
+   timestamp: Date,
++  upper_bound: number,
++  lower_bound: number,
++  trigger_alert: number | undefined,
+ }
+ 
+ 
+ export class DataManipulator {
+-  static generateRow(serverResponds: ServerRespond[]): Row[] {
+-    return serverResponds.map((el: any) => {
++  static generateRow(serverResponds: ServerRespond[]): Row {
++    const priceABC = (serverResponds[0].top_ask.price + serverResponds[0].top_bid.price)/2;
++    const priceDEF = (serverResponds[1].top_ask.price + serverResponds[1].top_bid.price)/2;
++    const ratio = priceABC / priceDEF;
++    const upper_bound = 1 + 0.08;
++    const lower_bound = 1 - 0.08;
+       return {
+-        stock: el.stock,
+-        top_ask_price: el.top_ask && el.top_ask.price || 0,
+-        timestamp: el.timestamp,
+-      };
+-    })
+-  }
++        price_abc: priceABC,
++        price_def: priceDEF,
++        ratio,
++        timestamp: serverResponds[0].timestamp > serverResponds[1].timestamp ?
++                    serverResponds[0].timestamp : serverResponds[1].timestamp, 
++                    upper_bound: upper_bound,
++                    lower_bound: lower_bound,
++        trigger_alert: (ratio > upper_bound || ratio < lower_bound ) ? ratio : undefined,
++  
++        };
++      }
+ }
++
+diff --git a/src/Graph.tsx b/src/Graph.tsx
+index 58fb997..669e05a 100644
+--- a/src/Graph.tsx
++++ b/src/Graph.tsx
+@@ -23,10 +23,13 @@ class Graph extends Component<IProps, {}> {
+     const elem = document.getElementsByTagName('perspective-viewer')[0] as unknown as PerspectiveViewerElement;
+ 
+     const schema = {
+-      stock: 'string',
+-      top_ask_price: 'float',
+-      top_bid_price: 'float',
++      price_abc: 'float',
++      price_def: 'float',
++      ratio: 'float',
+       timestamp: 'date',
++      upper_bound: 'float',
++      lower_bound: 'float',
++      trigger_alert: 'float',
+     };
+ 
+     if (window.perspective && window.perspective.worker()) {
+@@ -40,19 +43,22 @@ class Graph extends Component<IProps, {}> {
+       elem.setAttribute('row-pivots', '["timestamp"]');
+       elem.setAttribute('columns', '["top_ask_price"]');
+       elem.setAttribute('aggregates', JSON.stringify({
+-        stock: 'distinctcount',
+-        top_ask_price: 'avg',
+-        top_bid_price: 'avg',
++        price_abc: 'avg',
++        price_def: 'avg',
++        ratio:'avg',
+         timestamp: 'distinct count',
++        upper_bound: 'avg',
++        lower_bound: 'avg',
++        trigger_alert: 'avg',
+       }));
+     }
+   }
+ 
+   componentDidUpdate() {
+     if (this.table) {
+-      this.table.update(
++      this.table.update([
+         DataManipulator.generateRow(this.props.data),
+-      );
++      ]);
+     }
+   }
+ }
+-- 
+2.23.0
+
